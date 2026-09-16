@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎮</text></svg>"/>
 <title>КРОВАВЫЙ ЛАБИРИНТ 18.0</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
@@ -244,17 +245,16 @@ canvas{display:block;touch-action:none}
 #rotate-hint{display:none;position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:9999;color:#ff5a3c;font-size:16px;letter-spacing:3px;text-align:center;padding:40px 20px;align-items:center;justify-content:center;flex-direction:column;gap:20px}
 #rotate-hint .icon{font-size:60px}
 @media (max-width:900px) and (orientation:portrait){#rotate-hint.show{display:flex}}
-#clicklock{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.72);cursor:pointer;align-items:center;justify-content:center;flex-direction:column;gap:24px}
-#clicklock.show{display:flex}
-#clicklock .btn{padding:22px 44px;border:3px solid #ff5a3c;background:rgba(0,0,0,.85);font-size:18px;letter-spacing:5px;color:#ff5a3c;font-weight:bold;text-shadow:0 0 20px #ff5a3c;animation:pulseLock 1.5s infinite}
-#clicklock .hint{color:#8a8172;font-size:11px;letter-spacing:3px}
-@keyframes pulseLock{0%,100%{box-shadow:0 0 30px rgba(255,60,30,.5)}50%{box-shadow:0 0 60px rgba(255,60,30,.9)}}
+#relock{position:fixed;left:12px;top:60px;z-index:100;display:none;flex-direction:column;gap:4px;pointer-events:auto}
+#relock.show{display:flex}
+#relock button{padding:10px 16px;background:linear-gradient(180deg,#ff5a3c,#c82010);border:2px solid #ffaa88;color:#fff;font-family:inherit;font-size:11px;font-weight:bold;letter-spacing:2px;cursor:pointer;border-radius:6px;box-shadow:0 0 20px rgba(255,60,30,.5);animation:relockPulse 1.6s infinite}
+@keyframes relockPulse{0%,100%{box-shadow:0 0 20px rgba(255,60,30,.5)}50%{box-shadow:0 0 40px rgba(255,60,30,.9)}}
 </style>
 </head>
 <body>
 <div id="loading"><div class="spin"></div>ЗАГРУЗКА...</div>
 <div id="rotate-hint"><div class="icon">📱</div><div>ПОВЕРНИ УСТРОЙСТВО</div></div>
-<div id="clicklock"><div class="btn">▶ КЛИКНИ ЧТОБЫ ИГРАТЬ</div><div class="hint">МЫШЬ БУДЕТ ЗАХВАЧЕНА · ESC — ПАУЗА</div></div>
+<div id="relock"><button id="relockBtn">🖱️ ЗАХВАТИТЬ МЫШЬ</button></div>
 
 <div id="menu">
   <div class="menu-left">
@@ -345,7 +345,6 @@ canvas{display:block;touch-action:none}
 <div id="scope"></div><div id="damage"></div><div id="vignette"></div><div id="overlay"></div><div id="err"></div>
 
 <script>
-/* ===== ЗАГРУЗЧИК БИБЛИОТЕК ===== */
 (function(){
   const libs = [
     { name:'Three.js', check:()=>typeof THREE!=='undefined',
@@ -357,7 +356,9 @@ canvas{display:block;touch-action:none}
     { name:'MQTT', check:()=>typeof mqtt!=='undefined',
       urls:[
         'https://cdn.jsdelivr.net/npm/mqtt@5.5.0/dist/mqtt.min.js',
-        'https://unpkg.com/mqtt@5.5.0/dist/mqtt.min.js'
+        'https://unpkg.com/mqtt@5.5.0/dist/mqtt.min.js',
+        'https://cdn.jsdelivr.net/npm/mqtt@4.3.7/dist/mqtt.min.js',
+        'https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js'
       ]}
   ];
   function loadOne(lib, done){
@@ -679,10 +680,9 @@ let adsProgress=0;
 let crosshairGap=10,crosshairGapTarget=10;
 let swayT=0,fovPunch=0;
 
-/* ============ МУЛЬТИПЛЕЕР (ЕДИНЫЙ БРОКЕР) ============ */
-const LOBBY_TOPIC='krovavy_labyrinth_lobby_v8';
+/* ============ МУЛЬТИПЛЕЕР ============ */
+const LOBBY_TOPIC='krovavy_labyrinth_lobby_v9';
 const MQTT_BROKER='wss://broker.emqx.io:8084/mqtt';
-// Если EMQX у вас не работает — закомментируй строку выше и раскомментируй одну из:
 // const MQTT_BROKER='wss://test.mosquitto.org:8081/mqtt';
 // const MQTT_BROKER='wss://broker.hivemq.com:8884/mqtt';
 
@@ -704,7 +704,7 @@ function ensureMqtt(cb){
   mqttClient.on('connect',()=>{
     lobbyStatus('● ONLINE','online');
     mqttClient.subscribe(LOBBY_TOPIC,{qos:1});
-    if(roomCode)mqttClient.subscribe('krovavy_room_v8_'+roomCode,{qos:1});
+    if(roomCode)mqttClient.subscribe('krovavy_room_v9_'+roomCode,{qos:1});
     if(cb)cb();
   });
   mqttClient.on('message',handleMessage);
@@ -723,7 +723,7 @@ function closeRoomAnnounce(){
 }
 function broadcastRoom(type,extra){
   if(!mqttClient||!mqttClient.connected||!roomCode)return;
-  mqttClient.publish('krovavy_room_v8_'+roomCode,JSON.stringify(Object.assign({type,id:myId,name:myName,charId:currentCharId},extra||{})),{qos:1});
+  mqttClient.publish('krovavy_room_v9_'+roomCode,JSON.stringify(Object.assign({type,id:myId,name:myName,charId:currentCharId},extra||{})),{qos:1});
 }
 
 function handleMessage(topic,payload){
@@ -736,7 +736,7 @@ function handleMessage(topic,payload){
     } else if(msg.type==='close'){delete knownRooms[msg.code];renderRooms();}
     return;
   }
-  if(roomCode&&topic==='krovavy_room_v8_'+roomCode){
+  if(roomCode&&topic==='krovavy_room_v9_'+roomCode){
     if(msg.id===myId)return;
     if(msg.type==='join'){roomPlayers[msg.id]={name:msg.name,charId:msg.charId};renderWaitingRoom();}
     else if(msg.type==='leave'){delete roomPlayers[msg.id];const rp=remotePlayers[msg.id];if(rp){if(rp.model)scene.remove(rp.model);if(rp.tag&&rp.tag.parentNode)rp.tag.parentNode.removeChild(rp.tag);delete remotePlayers[msg.id];}renderWaitingRoom();}
@@ -749,14 +749,7 @@ function handleMessage(topic,payload){
     }
     else if(msg.type==='state'){
       if(!remotePlayers[msg.id]){
-        remotePlayers[msg.id]={
-          name:msg.name||'Игрок',
-          pos:new THREE.Vector3(msg.x||0,0,msg.z||0),
-          yaw:msg.ry||0, hp:msg.hp||100,
-          charId:msg.charId||'soldier',
-          lastSeen:performance.now(),
-          model:null,tag:null
-        };
+        remotePlayers[msg.id]={name:msg.name||'Игрок',pos:new THREE.Vector3(msg.x||0,0,msg.z||0),yaw:msg.ry||0,hp:msg.hp||100,charId:msg.charId||'soldier',lastSeen:performance.now(),model:null,tag:null};
         ensureRemoteModel(msg.id);
         addKill('👤 '+(msg.name||'Игрок')+' В ИГРЕ','boss');
       }
@@ -775,10 +768,8 @@ function createRoom(){
   ensureMqtt(()=>{
     myName=($('playerName').value.trim()||'Игрок').slice(0,12);
     roomCode=genCode();isHost=true;
-    mqttClient.subscribe('krovavy_room_v8_'+roomCode,{qos:1});
-    roomPlayers={};
-    mpMode='multi';
-    inWaitingRoom=true;
+    mqttClient.subscribe('krovavy_room_v9_'+roomCode,{qos:1});
+    roomPlayers={};mpMode='multi';inWaitingRoom=true;
     $('menu').classList.add('hidden');
     $('waiting-room').classList.add('show');
     $('wrCode').textContent=roomCode;
@@ -796,9 +787,8 @@ function joinRoom(code){
   ensureMqtt(()=>{
     myName=($('playerName').value.trim()||'Игрок').slice(0,12);
     roomCode=code;isHost=false;
-    mqttClient.subscribe('krovavy_room_v8_'+roomCode,{qos:1});
-    roomPlayers={};
-    mpMode='multi';inWaitingRoom=true;
+    mqttClient.subscribe('krovavy_room_v9_'+roomCode,{qos:1});
+    roomPlayers={};mpMode='multi';inWaitingRoom=true;
     $('menu').classList.add('hidden');
     $('waiting-room').classList.add('show');
     $('wrCode').textContent=roomCode;
@@ -812,7 +802,7 @@ function joinRoom(code){
 
 function leaveRoom(){
   if(roomCode){broadcastRoom('leave');if(isHost)closeRoomAnnounce();}
-  if(mqttClient&&roomCode)mqttClient.unsubscribe('krovavy_room_v8_'+roomCode);
+  if(mqttClient&&roomCode)mqttClient.unsubscribe('krovavy_room_v9_'+roomCode);
   roomCode=null;isHost=false;roomPlayers={};inWaitingRoom=false;gameStarted=false;
   for(const id in remotePlayers){if(remotePlayers[id].model)scene.remove(remotePlayers[id].model);if(remotePlayers[id].tag&&remotePlayers[id].tag.parentNode)remotePlayers[id].tag.parentNode.removeChild(remotePlayers[id].tag);}
   remotePlayers={};
@@ -931,19 +921,31 @@ $('wrStartBtn').addEventListener('click',()=>{
   gameStarted=true;
   beginMultiplayerGame();
 });
+
+/* ===== ОСНОВНАЯ КНОПКА — здесь запрашиваем pointer lock из user gesture ===== */
 $('startBtn').addEventListener('click',()=>{
   if(mpMode==='multi'){$('lobby-panel').classList.add('show');ensureMqtt();alert('Выбери комнату или создай свою');return;}
   initAudio();
+  requestLock();
   $('menu').classList.add('hidden');
   $('hud').classList.remove('hidden');
   startGame();
 });
+
+function requestLock(){
+  if(isMobile)return;
+  try{
+    const p=canvas.requestPointerLock();
+    if(p&&p.catch)p.catch(()=>{});
+  }catch(e){}
+}
 
 function beginMultiplayerGame(){
   $('waiting-room').classList.remove('show');
   $('menu').classList.add('hidden');
   $('hud').classList.remove('hidden');
   currentMap=MAPS[currentMapId];currentDiff=DIFFICULTIES[currentDiffId];
+  requestLock();
   startGame();
   setTimeout(()=>{for(const id in roomPlayers)ensureRemoteModel(id);},500);
 }
@@ -969,9 +971,9 @@ const ammoEl=$('ammo');function pulseAmmo(){if(!ammoEl)return;ammoEl.classList.a
 
 /* ============ ОВЕРЛЕЙ ============ */
 const overlay=$('overlay');
-function showOverlay(mode){overlay.classList.add('show');if(mode==='pause'){overlay.innerHTML='<h1>ПАУЗА</h1><h2>ВОЛНА '+state.wave+' • УБИЙСТВ: '+state.kills+'</h2><div class="keys">'+(isMobile?'ДЖОЙСТИК • ЭКРАН • 🔥 🎯 ⟳ ★':'WASD • МЫШЬ • ЛКМ ПКМ • R • F • E • 1-0')+'</div><div class="cta" id="resumeBtn">ПРОДОЛЖИТЬ</div><div class="cta secondary" id="menuBtn">В МЕНЮ</div>';$('resumeBtn').addEventListener('click',e=>{e.stopPropagation();resumeGame();});$('menuBtn').addEventListener('click',e=>{e.stopPropagation();goToMenu();});}}
+function showOverlay(mode){overlay.classList.add('show');if(mode==='pause'){overlay.innerHTML='<h1>ПАУЗА</h1><h2>ВОЛНА '+state.wave+' • УБИЙСТВ: '+state.kills+'</h2><div class="keys">'+(isMobile?'ДЖОЙСТИК • ЭКРАН • 🔥 🎯 ⟳ ★':'WASD • МЫШЬ • ЛКМ ПКМ • R • F • E • 1-0')+'</div><div class="cta" id="resumeBtn">ПРОДОЛЖИТЬ</div><div class="cta secondary" id="menuBtn">В МЕНЮ</div>';$('resumeBtn').addEventListener('click',e=>{e.stopPropagation();initAudio();requestLock();resumeGame();});$('menuBtn').addEventListener('click',e=>{e.stopPropagation();goToMenu();});}}
 function togglePause(){if(state.gameOver||!state.playing||state.paused||state.cutsceneActive)return;state.playing=false;state.paused=true;showOverlay('pause');if(!isMobile&&document.exitPointerLock)document.exitPointerLock();}
-function resumeGame(){overlay.classList.remove('show');state.playing=true;state.paused=false;firstMove=true;skipNextMouse=2;if(!isMobile)try{const p=canvas.requestPointerLock();if(p&&p.catch)p.catch(()=>{});}catch(e){}}
+function resumeGame(){overlay.classList.remove('show');state.playing=true;state.paused=false;firstMove=true;skipNextMouse=2;}
 function goToMenu(){overlay.classList.remove('show');$('shop-ui').classList.remove('show');state.playing=false;state.paused=false;state.gameOver=false;state.shopOpen=false;$('hud').classList.add('hidden');$('menu').classList.remove('hidden');if(!isMobile&&document.exitPointerLock)document.exitPointerLock();
   for(const e of[...enemies])removeEnemy(e);
   for(const b of activeBullets){b.spr.visible=false;bulletPool.push(b.spr);}activeBullets.length=0;
@@ -1120,7 +1122,6 @@ function endCutscene(silent){
   camera.fov=BASE_FOV;camera.updateProjectionMatrix();
   if(silent)return;
   state.playing=true;firstMove=true;skipNextMouse=2;
-  if(!isMobile)try{const p=canvas.requestPointerLock();if(p&&p.catch)p.catch(()=>{});}catch(e){}
   banner('БОЙ!',1.5);camShake=1.5;
   const n=state.wave;const mc=Math.min(8,3+Math.floor(n/3));
   for(let i=0;i<mc;i++){const p=pickSpawnCell();if(collidesAt(p.x,p.z,.7))continue;createMonster(p.x,p.z,n);}
@@ -1288,7 +1289,7 @@ function gameOver(){
   if(!isMobile&&document.exitPointerLock)document.exitPointerLock();
   overlay.classList.add('show');
   overlay.innerHTML='<h1>ТЫ МЁРТВ</h1><h2>'+currentMap.name+' • '+currentDiff.name+'</h2><div class="stat">ВОЛН: '+Math.max(0,state.wave-1)+' • УБИЙСТВ: '+state.kills+' • ОЧКОВ: '+state.score+'</div><div class="cta" id="retryBtn">ЕЩЁ РАЗ</div><div class="cta secondary" id="menuBtn2">В МЕНЮ</div>';
-  $('retryBtn').addEventListener('click',e=>{e.stopPropagation();retry();});
+  $('retryBtn').addEventListener('click',e=>{e.stopPropagation();initAudio();requestLock();retry();});
   $('menuBtn2').addEventListener('click',e=>{e.stopPropagation();goToMenu();});
 }
 function pickSpawnCell(){
@@ -1619,12 +1620,11 @@ function restart(){
   firstMove=true;skipNextMouse=2;
   updateShopVisual();
   if(roomCode)setTimeout(()=>broadcastRoom('join'),100);
-  // Показываем оверлей клика для pointer lock (вместо программного запроса)
-  if(!isMobile){
-    const cl=$('clicklock');
-    if(cl){cl.classList.add('show');}
-  } else {
+  // Стартуем первую волну сразу — pointer lock уже запрошен из клика по кнопке
+  if(isMobile){
     setTimeout(()=>{if(state.playing&&!state.gameOver&&state.wave===0)startWave(1);},800);
+  } else {
+    setTimeout(()=>{if(state.playing&&!state.gameOver&&state.wave===0)startWave(1);},200);
   }
 }
 const clock=new THREE.Clock();
@@ -1711,70 +1711,43 @@ function setupMobile(){
 function upJoy(){if(joyActive){$('joystick').style.opacity=1;$('joystick-knob').style.transform='translate(calc(-50% + '+(joyX*joyRadius)+'px),calc(-50% + '+(joyY*joyRadius)+'px))';}else{$('joystick').style.opacity=0.55;$('joystick-knob').style.transform='translate(-50%,-50%)';}}
 function cycleW(d){const owned=WEAPON_ORDER.filter(id=>state.weapons[id]);if(owned.length<=1)return;const i=owned.indexOf(state.currentWeapon);const n=(i+d+owned.length)%owned.length;switchWeapon(owned[n]);}
 
-/* ===== МЫШЬ + POINTER LOCK ===== */
+/* ===== МЫШЬ ===== */
 let lastMX=0,lastMY=0,firstMove=true,skipNextMouse=0;
 document.addEventListener('pointerlockchange',()=>{
   const locked=(document.pointerLockElement===canvas);
   firstMove=true;
   skipNextMouse=locked?2:0;
-  const cl=$('clicklock');
+  const rl=$('relock');
   if(locked){
-    if(cl)cl.classList.remove('show');
-    // Стартуем первую волну только когда реально взяли lock
-    if(state.playing&&!state.gameOver&&state.wave===0&&!isMobile){startWave(1);}
+    if(rl)rl.classList.remove('show');
   } else {
-    // Потеряли lock — показываем оверлей, если играем и не в паузе/меню
-    if(cl&&state.playing&&!state.paused&&!state.gameOver&&!state.shopOpen&&!state.cutsceneActive&&!isMobile){
-      cl.classList.add('show');
+    if(rl&&state.playing&&!state.paused&&!state.gameOver&&!state.shopOpen&&!state.cutsceneActive&&!isMobile){
+      rl.classList.add('show');
     }
   }
 });
+
+$('relockBtn').addEventListener('click',()=>{initAudio();requestLock();});
 
 document.addEventListener('mousemove',e=>{
   if(isMobile)return;
   if(!state.playing||state.gameOver||state.shopOpen||state.cutsceneActive)return;
   let dx=0,dy=0;
-  if(document.pointerLockElement===canvas){
-    dx=e.movementX||0;dy=e.movementY||0;
-  } else {
-    // Fallback без pointer lock (работает, но мышь может выходить за пределы окна)
-    if(firstMove){lastMX=e.clientX;lastMY=e.clientY;firstMove=false;return;}
-    if(skipNextMouse>0){skipNextMouse--;lastMX=e.clientX;lastMY=e.clientY;return;}
-    dx=e.clientX-lastMX;dy=e.clientY-lastMY;lastMX=e.clientX;lastMY=e.clientY;
-    if(dx>150||dx<-150||dy>150||dy<-150)return;
+  // movementX/Y работает и с pointer lock, и без (в современных браузерах)
+  dx=e.movementX||0;dy=e.movementY||0;
+  if(dx===0&&dy===0){
+    // fallback для старых браузеров
+    const cx=(typeof e.clientX==='number')?e.clientX:0;
+    const cy=(typeof e.clientY==='number')?e.clientY:0;
+    if(firstMove){lastMX=cx;lastMY=cy;firstMove=false;return;}
+    dx=cx-lastMX;dy=cy-lastMY;lastMX=cx;lastMY=cy;
+    if(Math.abs(dx)>250||Math.abs(dy)>250)return;
   }
   const sens=state.ads?0.0014:0.0025;
   yaw-=dx*sens;pitch-=dy*sens;
   const lim=Math.PI/2-.02;
   pitch=Math.max(-lim,Math.min(lim,pitch));
 });
-
-// Клик по оверлею захватывает мышь
-const clicklockEl=$('clicklock');
-if(clicklockEl){
-  clicklockEl.addEventListener('click',()=>{
-    try{
-      const p=canvas.requestPointerLock();
-      if(p&&p.then)p.then(()=>{}).catch(()=>{
-        // В случае отказа — скрываем оверлей и играем без lock
-        clicklockEl.classList.remove('show');
-        if(state.playing&&!state.gameOver&&state.wave===0)startWave(1);
-      });
-      else{
-        // Старый API — просто пробуем
-        setTimeout(()=>{
-          if(document.pointerLockElement!==canvas){
-            clicklockEl.classList.remove('show');
-            if(state.playing&&!state.gameOver&&state.wave===0)startWave(1);
-          }
-        },300);
-      }
-    }catch(_){
-      clicklockEl.classList.remove('show');
-      if(state.playing&&!state.gameOver&&state.wave===0)startWave(1);
-    }
-  });
-}
 
 const keys={};
 addEventListener('keydown',e=>{
@@ -1794,7 +1767,7 @@ document.addEventListener('mousedown',e=>{if(isMobile)return;if(!state.playing||
 document.addEventListener('mouseup',e=>{if(isMobile)return;if(e.button===0)shooting=false;if(e.button===2)state.ads=false;});
 document.addEventListener('contextmenu',e=>e.preventDefault());
 
-// Аудио: резюмируем на любое взаимодействие — самое надёжное
+// Аудио: резюмируем на любое взаимодействие
 ['click','touchstart','keydown','mousedown','pointerdown'].forEach(evt=>{
   document.addEventListener(evt,()=>{initAudio();},{passive:true});
 });
